@@ -1,0 +1,1242 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Asistente</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     PANTALLA PRINCIPAL
+═══════════════════════════════════════════ -->
+<div id="screen-main" class="screen active">
+  <div class="top-bar">
+    <span id="status-battery">🔋</span>
+    <span id="status-wifi">📶</span>
+    <span id="assistant-name">Asistente</span>
+    <button class="icon-btn" onclick="showScreen('screen-settings')">⚙️</button>
+  </div>
+
+  <div class="orb-container">
+    <div id="orb" class="orb idle" onclick="toggleListening()">
+      <div class="orb-ring"></div>
+      <div class="orb-ring r2"></div>
+      <div class="orb-core">
+        <span id="orb-icon">🎙️</span>
+      </div>
+    </div>
+    <p id="orb-label">Toca para hablar</p>
+  </div>
+
+  <div id="transcript-box" class="transcript-box hidden">
+    <p id="transcript-text"></p>
+  </div>
+
+  <div id="confirm-box" class="confirm-box hidden">
+    <p id="confirm-text"></p>
+    <div class="confirm-timer-bar"><div id="confirm-timer-fill"></div></div>
+    <div class="confirm-btns">
+      <button class="btn-no" onclick="handleConfirm(false)">No</button>
+      <button class="btn-yes" onclick="handleConfirm(true)">Sí</button>
+    </div>
+  </div>
+
+  <div id="response-box" class="response-box hidden">
+    <p id="response-text"></p>
+  </div>
+
+  <!-- Controles de música -->
+  <div id="music-player" class="music-player hidden">
+    <div class="music-info">
+      <span id="music-title">Sin música</span>
+      <span id="music-artist"></span>
+    </div>
+    <div class="music-controls">
+      <button onclick="musicPrev()">⏮</button>
+      <button id="btn-play-pause" onclick="musicPlayPause()">▶️</button>
+      <button onclick="musicNext()">⏭</button>
+      <button id="btn-shuffle" onclick="musicShuffle()">🔀</button>
+    </div>
+  </div>
+
+  <nav class="bottom-nav">
+    <button onclick="showScreen('screen-contacts')">👥<span>Contactos</span></button>
+    <button onclick="showScreen('screen-music')">🎵<span>Música</span></button>
+    <button onclick="showScreen('screen-apps')">📱<span>Apps</span></button>
+    <button onclick="showScreen('screen-routines')">⏰<span>Rutinas</span></button>
+  </nav>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     PANTALLA CONTACTOS
+═══════════════════════════════════════════ -->
+<div id="screen-contacts" class="screen">
+  <div class="screen-header">
+    <button class="back-btn" onclick="showScreen('screen-main')">←</button>
+    <h2>Contactos</h2>
+    <button class="icon-btn" onclick="openAddContact()">＋</button>
+  </div>
+  <input type="search" id="contact-search" placeholder="Buscar contacto..." oninput="renderContacts()" />
+  <div id="contacts-list" class="list-container"></div>
+
+  <div id="contact-modal" class="modal hidden">
+    <div class="modal-box">
+      <h3 id="contact-modal-title">Nuevo Contacto</h3>
+      <input type="text" id="contact-name-input" placeholder="Nombre" />
+      <input type="tel" id="contact-phone-input" placeholder="Teléfono" />
+      <label><input type="checkbox" id="contact-fav" /> Favorito</label>
+      <div class="modal-btns">
+        <button onclick="closeContactModal()">Cancelar</button>
+        <button class="btn-primary" onclick="saveContact()">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     PANTALLA MÚSICA
+═══════════════════════════════════════════ -->
+<div id="screen-music" class="screen">
+  <div class="screen-header">
+    <button class="back-btn" onclick="showScreen('screen-main')">←</button>
+    <h2>Música</h2>
+    <button class="icon-btn" onclick="loadMusicFiles()">🔄</button>
+  </div>
+  <input type="search" id="music-search" placeholder="Buscar canción o artista..." oninput="renderMusicList()" />
+  <div id="music-list" class="list-container"></div>
+  <!-- Input oculto para cargar archivos -->
+  <input type="file" id="file-picker" accept="audio/*" multiple style="display:none" onchange="onFilesSelected(event)" />
+</div>
+
+<!-- ═══════════════════════════════════════════
+     PANTALLA APPS
+═══════════════════════════════════════════ -->
+<div id="screen-apps" class="screen">
+  <div class="screen-header">
+    <button class="back-btn" onclick="showScreen('screen-main')">←</button>
+    <h2>Abrir Aplicaciones</h2>
+  </div>
+  <p class="hint">Di "abre [app]" con el micrófono, o toca una app abajo.</p>
+  <div id="apps-list" class="apps-grid"></div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     PANTALLA RUTINAS
+═══════════════════════════════════════════ -->
+<div id="screen-routines" class="screen">
+  <div class="screen-header">
+    <button class="back-btn" onclick="showScreen('screen-main')">←</button>
+    <h2>Rutinas</h2>
+    <button class="icon-btn" onclick="openAddRoutine()">＋</button>
+  </div>
+  <div id="routines-list" class="list-container"></div>
+
+  <div id="routine-modal" class="modal hidden">
+    <div class="modal-box">
+      <h3>Nueva Rutina</h3>
+      <input type="text" id="routine-name-input" placeholder="Nombre (ej: Buenos días)" />
+      <input type="time" id="routine-time-input" />
+      <textarea id="routine-msg-input" placeholder="Mensaje que dirá el asistente"></textarea>
+      <label><input type="checkbox" id="routine-active" checked /> Activa</label>
+      <div class="modal-btns">
+        <button onclick="closeRoutineModal()">Cancelar</button>
+        <button class="btn-primary" onclick="saveRoutine()">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     PANTALLA CONFIGURACIÓN
+═══════════════════════════════════════════ -->
+<div id="screen-settings" class="screen">
+  <div class="screen-header">
+    <button class="back-btn" onclick="showScreen('screen-main')">←</button>
+    <h2>Configuración</h2>
+  </div>
+  <div class="settings-group">
+    <label>Tu nombre</label>
+    <input type="text" id="pref-name" placeholder="Ej: Carlos" />
+  </div>
+  <div class="settings-group">
+    <label>Nombre del asistente</label>
+    <input type="text" id="pref-assistant-name" placeholder="Ej: Nova" />
+  </div>
+  <div class="settings-group">
+    <label>Palabra de activación</label>
+    <input type="text" id="pref-keyword" placeholder="Ej: oye nova" />
+  </div>
+  <div class="settings-group">
+    <label>Velocidad de voz</label>
+    <input type="range" id="pref-rate" min="0.5" max="2" step="0.1" value="1" oninput="updateRateLabel(this.value)" />
+    <span id="rate-label">1.0x</span>
+  </div>
+  <div class="settings-group">
+    <label>Tono de voz</label>
+    <input type="range" id="pref-pitch" min="0.5" max="2" step="0.1" value="1" />
+  </div>
+  <button class="btn-primary full-width" onclick="savePreferences()">Guardar preferencias</button>
+  <button class="btn-secondary full-width" style="margin-top:8px" onclick="testVoice()">Probar voz</button>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     TOAST
+═══════════════════════════════════════════ -->
+<div id="toast" class="toast hidden"></div>
+
+<!-- ═══════════════════════════════════════════
+     AUDIO ELEMENT
+═══════════════════════════════════════════ -->
+<audio id="audio-player" onended="onSongEnded()"></audio>
+
+<script>
+// ════════════════════════════════════════════════
+// ESTADO GLOBAL
+// ════════════════════════════════════════════════
+const State = {
+  listening: false,
+  confirming: false,
+  confirmCallback: null,
+  confirmTimer: null,
+  contacts: [],
+  music: [],        // {name, artist, album, url, file}
+  musicIndex: -1,
+  musicPlaying: false,
+  musicShuffle: false,
+  routines: [],
+  routineTimers: [],
+  preferences: {
+    userName: '',
+    assistantName: 'Asistente',
+    keyword: 'oye asistente',
+    rate: 1,
+    pitch: 1
+  },
+  editingContact: null,
+  editingRoutine: null
+};
+
+// ════════════════════════════════════════════════
+// PERSISTENCIA
+// ════════════════════════════════════════════════
+function save() {
+  localStorage.setItem('contacts', JSON.stringify(State.contacts));
+  localStorage.setItem('music_meta', JSON.stringify(State.music.map(m => ({name:m.name,artist:m.artist,album:m.album}))));
+  localStorage.setItem('routines', JSON.stringify(State.routines));
+  localStorage.setItem('preferences', JSON.stringify(State.preferences));
+}
+
+function load() {
+  try { State.contacts = JSON.parse(localStorage.getItem('contacts')) || []; } catch(e){}
+  try { State.routines = JSON.parse(localStorage.getItem('routines')) || []; } catch(e){}
+  try {
+    const p = JSON.parse(localStorage.getItem('preferences'));
+    if (p) Object.assign(State.preferences, p);
+  } catch(e){}
+}
+
+// ════════════════════════════════════════════════
+// NAVEGACIÓN DE PANTALLAS
+// ════════════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if (id === 'screen-contacts') renderContacts();
+  if (id === 'screen-music') renderMusicList();
+  if (id === 'screen-apps') renderApps();
+  if (id === 'screen-routines') renderRoutines();
+  if (id === 'screen-settings') loadPreferencesUI();
+}
+
+// ════════════════════════════════════════════════
+// SÍNTESIS DE VOZ (TTS)
+// ════════════════════════════════════════════════
+function speak(text, callback) {
+  if (!('speechSynthesis' in window)) { if(callback) callback(); return; }
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'es-ES';
+  u.rate = State.preferences.rate || 1;
+  u.pitch = State.preferences.pitch || 1;
+  u.onend = () => { if(callback) callback(); };
+  window.speechSynthesis.speak(u);
+  showResponse(text);
+}
+
+// ════════════════════════════════════════════════
+// RECONOCIMIENTO DE VOZ (STT)
+// ════════════════════════════════════════════════
+let recognition = null;
+let bgRecognition = null;
+
+function initSpeechRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) { toast('Reconocimiento de voz no disponible'); return; }
+  recognition = new SpeechRecognition();
+  recognition.lang = 'es-ES';
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.onresult = (e) => {
+    const t = Array.from(e.results).map(r => r[0].transcript).join('');
+    showTranscript(t);
+    if (e.results[e.results.length - 1].isFinal) processCommand(t.toLowerCase().trim());
+  };
+  recognition.onerror = (e) => {
+    if (e.error !== 'no-speech') toast('Error de micrófono: ' + e.error);
+    setOrbIdle();
+  };
+  recognition.onend = () => setOrbIdle();
+}
+
+function toggleListening() {
+  if (State.listening) {
+    stopListening();
+  } else {
+    startListening();
+  }
+}
+
+function startListening() {
+  if (!recognition) initSpeechRecognition();
+  if (!recognition) return;
+  State.listening = true;
+  setOrbListening();
+  hideTranscript();
+  try { recognition.start(); } catch(e) {}
+}
+
+function stopListening() {
+  State.listening = false;
+  setOrbIdle();
+  if (recognition) try { recognition.stop(); } catch(e) {}
+}
+
+// Escucha de fondo para palabra clave
+function startBackgroundListening() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) return;
+  bgRecognition = new SpeechRecognition();
+  bgRecognition.lang = 'es-ES';
+  bgRecognition.continuous = true;
+  bgRecognition.interimResults = false;
+  bgRecognition.onresult = (e) => {
+    const t = Array.from(e.results).map(r => r[0].transcript).join(' ').toLowerCase();
+    const kw = (State.preferences.keyword || 'oye asistente').toLowerCase();
+    if (t.includes(kw)) {
+      startListening();
+    }
+  };
+  bgRecognition.onend = () => {
+    if (!State.listening) setTimeout(startBackgroundListening, 1000);
+  };
+  try { bgRecognition.start(); } catch(e) {}
+}
+
+// ════════════════════════════════════════════════
+// PROCESAMIENTO DE COMANDOS
+// ════════════════════════════════════════════════
+function processCommand(cmd) {
+  // CANCELAR siempre tiene prioridad
+  if (cmd.includes('cancelar') || cmd.includes('cancela')) {
+    cancelAll();
+    speak('Cancelado.');
+    return;
+  }
+
+  // Si hay confirmación pendiente
+  if (State.confirming) {
+    if (cmd.includes('sí') || cmd.includes('si') || cmd.includes('yes')) handleConfirm(true);
+    else if (cmd.includes('no')) handleConfirm(false);
+    return;
+  }
+
+  // ── LLAMADAS ──
+  if (cmd.match(/llama(r)? a (.+)/)) {
+    const name = cmd.match(/llama(r)? a (.+)/)[2].trim();
+    handleCall(name);
+    return;
+  }
+  if (cmd.match(/llama(r)? al? (\d+)/)) {
+    const num = cmd.match(/llama(r)? al? (\d+)/)[2];
+    requireConfirm(`¿Confirmas llamar al número ${num}?`, () => callNumber(num));
+    return;
+  }
+  if (cmd.includes('emergencia') || cmd.includes('llama al 112') || cmd.includes('llama al 911')) {
+    const num = cmd.includes('911') ? '911' : '112';
+    requireConfirm(`⚠️ ¿Confirmas llamar al número de emergencias ${num}?`, () => callNumber(num));
+    return;
+  }
+
+  // ── WHATSAPP ──
+  if (cmd.match(/env[ií]a(r)? (un )?mensaje (de whatsapp |por whatsapp )?a (.+)/)) {
+    const m = cmd.match(/env[ií]a(r)? (un )?mensaje (de whatsapp |por whatsapp )?a (.+)/);
+    const name = m[4].trim();
+    requireConfirm(`¿Confirmas enviar mensaje de WhatsApp a ${name}?`, () => sendWhatsApp(name));
+    return;
+  }
+  if (cmd.includes('lee') && cmd.includes('whatsapp') || cmd.includes('leer') && cmd.includes('whatsapp')) {
+    requireConfirm('¿Confirmas leer tus mensajes de WhatsApp?', () => readWhatsApp());
+    return;
+  }
+
+  // ── MÚSICA ──
+  if (cmd.includes('reproduce') || cmd.includes('reproducir') || cmd.includes('pon música') || cmd.includes('toca ')) {
+    const songMatch = cmd.match(/(?:reproduce|toca|pon) (.+)/);
+    if (songMatch) playMusicByQuery(songMatch[1]);
+    else playMusicByQuery('');
+    return;
+  }
+  if (cmd.includes('pausa') || cmd.includes('pausar') || cmd.includes('detén') || cmd.includes('detener')) {
+    musicPause(); speak('Música pausada.'); return;
+  }
+  if (cmd.includes('siguiente') || cmd.includes('próxima')) { musicNext(); return; }
+  if (cmd.includes('anterior') || cmd.includes('canción anterior')) { musicPrev(); return; }
+  if (cmd.includes('aleatorio') || cmd.includes('modo aleatorio')) { musicShuffle(); return; }
+
+  // ── VOLUMEN ──
+  if (cmd.includes('sube el volumen') || cmd.includes('subir volumen')) {
+    adjustVolume(0.1); speak('Subiendo volumen.'); return;
+  }
+  if (cmd.includes('baja el volumen') || cmd.includes('bajar volumen')) {
+    adjustVolume(-0.1); speak('Bajando volumen.'); return;
+  }
+
+  // ── BRILLO ──
+  if (cmd.includes('sube el brillo') || cmd.includes('subir brillo')) {
+    speak('Ajustando brillo, por favor ve a configuración del sistema.'); return;
+  }
+  if (cmd.includes('baja el brillo') || cmd.includes('bajar brillo')) {
+    speak('Ajustando brillo, por favor ve a configuración del sistema.'); return;
+  }
+
+  // ── LINTERNA ──
+  if (cmd.includes('enciende la linterna') || cmd.includes('linterna on') || cmd.includes('prende la linterna')) {
+    toggleTorch(true); return;
+  }
+  if (cmd.includes('apaga la linterna') || cmd.includes('linterna off')) {
+    toggleTorch(false); return;
+  }
+
+  // ── WIFI ──
+  if (cmd.includes('activa el wifi') || cmd.includes('enciende el wifi')) {
+    speak('Para activar WiFi ve a Configuración del sistema. Capacitor no puede cambiar WiFi directamente.'); return;
+  }
+  if (cmd.includes('apaga el wifi') || cmd.includes('desactiva el wifi')) {
+    speak('Para desactivar WiFi ve a Configuración del sistema.'); return;
+  }
+  if (cmd.includes('tengo wifi') || cmd.includes('estado del wifi') || cmd.includes('hay wifi')) {
+    const online = navigator.onLine;
+    speak(online ? 'Sí, tienes conexión activa.' : 'No tienes conexión a internet.'); return;
+  }
+
+  // ── BLUETOOTH ──
+  if (cmd.includes('activa bluetooth') || cmd.includes('enciende bluetooth')) {
+    openBluetoothSettings(); return;
+  }
+  if (cmd.includes('apaga bluetooth') || cmd.includes('desactiva bluetooth')) {
+    openBluetoothSettings(); return;
+  }
+
+  // ── MODO AVIÓN ──
+  if (cmd.includes('modo avión') || cmd.includes('modo avion')) {
+    requireConfirm('¿Confirmas activar el modo avión? Perderás conexión.', () => {
+      speak('Abriendo configuración para activar modo avión.');
+      openSystemSettings('airplane');
+    });
+    return;
+  }
+
+  // ── BATERÍA ──
+  if (cmd.includes('cuánta batería') || cmd.includes('batería') || cmd.includes('nivel de batería')) {
+    checkBattery(); return;
+  }
+
+  // ── ALMACENAMIENTO ──
+  if (cmd.includes('espacio') || cmd.includes('almacenamiento')) {
+    checkStorage(); return;
+  }
+
+  // ── CALCULADORA ──
+  const mathMatch = cmd.match(/cuánto es (.+)|calcula (.+)|cuanto es (.+)/);
+  if (mathMatch) {
+    const expr = (mathMatch[1] || mathMatch[2] || mathMatch[3]).trim();
+    calculateExpression(expr); return;
+  }
+  if (cmd.includes('calculadora') || cmd.includes('abre la calculadora')) {
+    openApp('calculadora'); return;
+  }
+
+  // ── ABRIR APP ──
+  const appMatch = cmd.match(/abre? (.+)|abrir (.+)/);
+  if (appMatch) {
+    openApp((appMatch[1] || appMatch[2]).trim()); return;
+  }
+
+  // ── BUSCAR EN NAVEGADOR ──
+  const searchMatch = cmd.match(/busca(r)? (.+) en (google|internet|el navegador|chrome)/);
+  if (searchMatch) {
+    browserSearch(searchMatch[2]); return;
+  }
+  if (cmd.startsWith('busca ') || cmd.startsWith('buscar ')) {
+    browserSearch(cmd.replace(/^busca(r)?\s+/, '')); return;
+  }
+
+  // ── HORA ──
+  if (cmd.includes('qué hora') || cmd.includes('que hora')) {
+    const t = new Date().toLocaleTimeString('es-ES', {hour:'2-digit',minute:'2-digit'});
+    speak(`Son las ${t}.`); return;
+  }
+
+  // ── FECHA ──
+  if (cmd.includes('qué día') || cmd.includes('que dia') || cmd.includes('qué fecha')) {
+    const d = new Date().toLocaleDateString('es-ES', {weekday:'long', day:'numeric', month:'long'});
+    speak(`Hoy es ${d}.`); return;
+  }
+
+  // ── SALUDO ──
+  if (cmd.includes('hola') || cmd.includes('buenas') || cmd.includes('cómo estás')) {
+    const n = State.preferences.userName ? `, ${State.preferences.userName}` : '';
+    const h = getGreeting();
+    speak(`${h}${n}. ¿En qué te puedo ayudar?`); return;
+  }
+
+  // No entendió
+  speak('No entendí ese comando. ¿Puedes repetirlo?');
+}
+
+// ════════════════════════════════════════════════
+// CONFIRMACIONES
+// ════════════════════════════════════════════════
+function requireConfirm(question, callback) {
+  State.confirming = true;
+  State.confirmCallback = callback;
+  speak(question);
+  showConfirm(question);
+  let remaining = 50;
+  const fill = document.getElementById('confirm-timer-fill');
+  clearInterval(State.confirmTimer);
+  State.confirmTimer = setInterval(() => {
+    remaining--;
+    if (fill) fill.style.width = (remaining * 2) + '%';
+    if (remaining <= 0) handleConfirm(false);
+  }, 100);
+}
+
+function handleConfirm(yes) {
+  clearInterval(State.confirmTimer);
+  hideConfirm();
+  State.confirming = false;
+  if (yes && State.confirmCallback) {
+    State.confirmCallback();
+  } else {
+    speak('Acción cancelada.');
+  }
+  State.confirmCallback = null;
+}
+
+function cancelAll() {
+  clearInterval(State.confirmTimer);
+  State.confirming = false;
+  State.confirmCallback = null;
+  stopListening();
+  hideConfirm();
+  window.speechSynthesis && window.speechSynthesis.cancel();
+}
+
+// ════════════════════════════════════════════════
+// LLAMADAS
+// ════════════════════════════════════════════════
+function handleCall(name) {
+  const contact = findContact(name);
+  if (contact) {
+    requireConfirm(`¿Confirmas llamar a ${contact.name}?`, () => callNumber(contact.phone));
+  } else {
+    speak(`No encontré el contacto ${name}. Por favor dicta el número.`);
+    // Espera un siguiente comando con el número
+    setTimeout(() => startListening(), 2000);
+  }
+}
+
+function callNumber(number) {
+  speak(`Llamando al ${number}.`, () => {
+    window.location.href = `tel:${number}`;
+  });
+}
+
+function findContact(name) {
+  const q = name.toLowerCase();
+  return State.contacts.find(c => c.name.toLowerCase().includes(q));
+}
+
+// ════════════════════════════════════════════════
+// WHATSAPP
+// ════════════════════════════════════════════════
+function sendWhatsApp(name) {
+  const contact = findContact(name);
+  if (contact) {
+    const num = contact.phone.replace(/\D/g, '');
+    speak(`Abriendo WhatsApp para ${contact.name}.`);
+    window.open(`https://wa.me/${num}`, '_system');
+  } else {
+    speak(`No encontré el contacto ${name} para WhatsApp.`);
+  }
+}
+
+function readWhatsApp() {
+  speak('Abriendo WhatsApp para leer mensajes.');
+  window.open('whatsapp://open', '_system');
+}
+
+// ════════════════════════════════════════════════
+// MÚSICA
+// ════════════════════════════════════════════════
+function loadMusicFiles() {
+  document.getElementById('file-picker').click();
+}
+
+function onFilesSelected(event) {
+  const files = Array.from(event.target.files);
+  files.forEach(file => {
+    const url = URL.createObjectURL(file);
+    // Extrae metadatos básicos del nombre
+    const base = file.name.replace(/\.[^.]+$/, '');
+    const parts = base.split(' - ');
+    const artist = parts.length > 1 ? parts[0].trim() : 'Desconocido';
+    const name = parts.length > 1 ? parts[1].trim() : base;
+    State.music.push({ name, artist, album: '', url, file });
+  });
+  save();
+  renderMusicList();
+  toast(`${files.length} canciones cargadas`);
+}
+
+function renderMusicList() {
+  const q = (document.getElementById('music-search')?.value || '').toLowerCase();
+  const list = document.getElementById('music-list');
+  if (!list) return;
+  const filtered = State.music.filter(m =>
+    m.name.toLowerCase().includes(q) || m.artist.toLowerCase().includes(q)
+  );
+  list.innerHTML = filtered.length ? filtered.map((m, i) => `
+    <div class="list-item" onclick="playMusicAt(${State.music.indexOf(m)})">
+      <div class="list-item-icon">🎵</div>
+      <div class="list-item-info">
+        <span class="list-item-title">${m.name}</span>
+        <span class="list-item-sub">${m.artist}</span>
+      </div>
+      <button class="icon-btn" onclick="event.stopPropagation();removeSong(${State.music.indexOf(m)})">🗑</button>
+    </div>
+  `).join('') : `<p class="empty-hint">Sin canciones. Toca 🔄 para cargar archivos MP3.</p>`;
+}
+
+function playMusicAt(index) {
+  if (index < 0 || index >= State.music.length) return;
+  State.musicIndex = index;
+  const song = State.music[index];
+  const audio = document.getElementById('audio-player');
+  audio.src = song.url;
+  audio.play();
+  State.musicPlaying = true;
+  updateMusicUI(song);
+  showMusicPlayer();
+}
+
+function playMusicByQuery(query) {
+  if (State.music.length === 0) {
+    speak('No hay canciones cargadas. Ve a la pestaña Música para cargar archivos MP3.');
+    return;
+  }
+  if (!query) {
+    playMusicAt(0);
+    speak(`Reproduciendo ${State.music[0].name}.`);
+    return;
+  }
+  const q = query.toLowerCase();
+  const idx = State.music.findIndex(m =>
+    m.name.toLowerCase().includes(q) || m.artist.toLowerCase().includes(q)
+  );
+  if (idx >= 0) {
+    playMusicAt(idx);
+    speak(`Reproduciendo ${State.music[idx].name} de ${State.music[idx].artist}.`);
+  } else {
+    speak(`No encontré ninguna canción con "${query}".`);
+  }
+}
+
+function musicPlayPause() {
+  const audio = document.getElementById('audio-player');
+  if (State.musicPlaying) {
+    audio.pause();
+    State.musicPlaying = false;
+    document.getElementById('btn-play-pause').textContent = '▶️';
+  } else {
+    audio.play();
+    State.musicPlaying = true;
+    document.getElementById('btn-play-pause').textContent = '⏸';
+  }
+}
+
+function musicPause() {
+  const audio = document.getElementById('audio-player');
+  audio.pause();
+  State.musicPlaying = false;
+  if(document.getElementById('btn-play-pause'))
+    document.getElementById('btn-play-pause').textContent = '▶️';
+}
+
+function musicNext() {
+  if (State.music.length === 0) return;
+  let idx = State.musicShuffle
+    ? Math.floor(Math.random() * State.music.length)
+    : (State.musicIndex + 1) % State.music.length;
+  playMusicAt(idx);
+  speak(`Siguiente: ${State.music[idx].name}.`);
+}
+
+function musicPrev() {
+  if (State.music.length === 0) return;
+  let idx = State.musicShuffle
+    ? Math.floor(Math.random() * State.music.length)
+    : (State.musicIndex - 1 + State.music.length) % State.music.length;
+  playMusicAt(idx);
+  speak(`Anterior: ${State.music[idx].name}.`);
+}
+
+function musicShuffle() {
+  State.musicShuffle = !State.musicShuffle;
+  const btn = document.getElementById('btn-shuffle');
+  if(btn) btn.style.opacity = State.musicShuffle ? '1' : '0.4';
+  speak(State.musicShuffle ? 'Modo aleatorio activado.' : 'Modo aleatorio desactivado.');
+}
+
+function onSongEnded() {
+  musicNext();
+}
+
+function removeSong(index) {
+  URL.revokeObjectURL(State.music[index].url);
+  State.music.splice(index, 1);
+  if (State.musicIndex >= State.music.length) State.musicIndex = State.music.length - 1;
+  renderMusicList();
+}
+
+function updateMusicUI(song) {
+  const t = document.getElementById('music-title');
+  const a = document.getElementById('music-artist');
+  const b = document.getElementById('btn-play-pause');
+  if(t) t.textContent = song.name;
+  if(a) a.textContent = song.artist;
+  if(b) b.textContent = '⏸';
+}
+
+function showMusicPlayer() {
+  document.getElementById('music-player').classList.remove('hidden');
+}
+
+// ════════════════════════════════════════════════
+// VOLUMEN
+// ════════════════════════════════════════════════
+function adjustVolume(delta) {
+  const audio = document.getElementById('audio-player');
+  audio.volume = Math.min(1, Math.max(0, audio.volume + delta));
+  speak(`Volumen al ${Math.round(audio.volume * 100)} por ciento.`);
+}
+
+// ════════════════════════════════════════════════
+// LINTERNA (requiere Capacitor plugin)
+// ════════════════════════════════════════════════
+async function toggleTorch(on) {
+  try {
+    if (window.Capacitor && Capacitor.isPluginAvailable('Torch')) {
+      const { Torch } = Capacitor.Plugins;
+      await (on ? Torch.switchOn() : Torch.switchOff());
+      speak(on ? 'Linterna encendida.' : 'Linterna apagada.');
+    } else {
+      // Fallback: API de MediaDevices (solo Chrome)
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      const track = stream.getVideoTracks()[0];
+      await track.applyConstraints({ advanced: [{ torch: on }] });
+      speak(on ? 'Linterna encendida.' : 'Linterna apagada.');
+    }
+  } catch(e) {
+    speak('No pude controlar la linterna desde esta app.');
+  }
+}
+
+// ════════════════════════════════════════════════
+// CONFIGURACIÓN DEL SISTEMA
+// ════════════════════════════════════════════════
+function openBluetoothSettings() {
+  speak('Abriendo configuración de Bluetooth.');
+  if (window.Capacitor) {
+    try { Capacitor.Plugins.App.openUrl({ url: 'android.settings.BLUETOOTH_SETTINGS' }); } catch(e) {}
+  }
+}
+
+function openSystemSettings(type) {
+  if (window.Capacitor) {
+    try {
+      const urls = {
+        airplane: 'android.settings.AIRPLANE_MODE_SETTINGS',
+        wifi: 'android.settings.WIFI_SETTINGS'
+      };
+      Capacitor.Plugins.App.openUrl({ url: urls[type] || 'android.settings.SETTINGS' });
+    } catch(e) {}
+  }
+}
+
+// ════════════════════════════════════════════════
+// BATERÍA
+// ════════════════════════════════════════════════
+async function checkBattery() {
+  try {
+    const battery = await navigator.getBattery();
+    const pct = Math.round(battery.level * 100);
+    const charging = battery.charging ? ', y está cargando' : '';
+    speak(`Tienes ${pct} por ciento de batería${charging}.`);
+    updateBatteryUI(pct, battery.charging);
+  } catch(e) {
+    speak('No pude leer el nivel de batería.');
+  }
+}
+
+function updateBatteryUI(pct, charging) {
+  const el = document.getElementById('status-battery');
+  if(el) el.textContent = `${charging ? '⚡' : '🔋'}${pct}%`;
+}
+
+// ════════════════════════════════════════════════
+// ALMACENAMIENTO
+// ════════════════════════════════════════════════
+async function checkStorage() {
+  try {
+    const est = await navigator.storage.estimate();
+    const free = est.quota - est.usage;
+    const mb = Math.round(free / 1024 / 1024);
+    speak(`Tienes aproximadamente ${mb} megabytes de espacio libre en esta app.`);
+  } catch(e) {
+    speak('No pude verificar el almacenamiento disponible.');
+  }
+}
+
+// ════════════════════════════════════════════════
+// CALCULADORA
+// ════════════════════════════════════════════════
+function calculateExpression(expr) {
+  try {
+    let e = expr
+      .replace(/más/g, '+').replace(/mas/g, '+')
+      .replace(/menos/g, '-')
+      .replace(/por/g, '*').replace(/multiplicado por/g, '*')
+      .replace(/entre/g, '/').replace(/dividido entre/g, '/').replace(/dividido por/g, '/')
+      .replace(/al cuadrado/g, '**2').replace(/elevado a/g, '**')
+      .replace(/[^\d\s\+\-\*\/\.\(\)\*\^]/g, '');
+    // eslint-disable-next-line no-eval
+    const result = Function('"use strict"; return (' + e + ')')();
+    speak(`El resultado es ${result}.`);
+  } catch(err) {
+    speak('No pude calcular esa expresión. Intenta de nuevo.');
+  }
+}
+
+// ════════════════════════════════════════════════
+// APPS
+// ════════════════════════════════════════════════
+const KNOWN_APPS = [
+  { name: 'WhatsApp', keywords: ['whatsapp'], url: 'whatsapp://open', icon: '💬' },
+  { name: 'YouTube', keywords: ['youtube'], url: 'https://youtube.com', icon: '▶️' },
+  { name: 'Maps', keywords: ['maps','google maps','mapa','navegación'], url: 'https://maps.google.com', icon: '🗺️' },
+  { name: 'Cámara', keywords: ['cámara','camara','foto'], url: 'android.media.action.IMAGE_CAPTURE', icon: '📷' },
+  { name: 'Instagram', keywords: ['instagram'], url: 'instagram://app', icon: '📷' },
+  { name: 'Chrome', keywords: ['chrome','navegador'], url: 'googlechrome://navigate', icon: '🌐' },
+  { name: 'Teléfono', keywords: ['teléfono','telefono','marcador'], url: 'tel:', icon: '📞' },
+  { name: 'Galería', keywords: ['galería','galeria','fotos'], url: 'content://media/external/images/media', icon: '🖼️' },
+  { name: 'Ajustes', keywords: ['ajustes','configuración','settings'], url: 'android.settings.SETTINGS', icon: '⚙️' },
+  { name: 'Calculadora', keywords: ['calculadora'], url: 'android.launch.action.CALCULATOR', icon: '🔢' },
+  { name: 'Spotify', keywords: ['spotify'], url: 'spotify://', icon: '🎧' },
+  { name: 'Telegram', keywords: ['telegram'], url: 'tg://', icon: '✈️' },
+];
+
+function renderApps() {
+  const grid = document.getElementById('apps-list');
+  if (!grid) return;
+  grid.innerHTML = KNOWN_APPS.map(app => `
+    <div class="app-tile" onclick="launchApp('${app.url}', '${app.name}')">
+      <span class="app-icon">${app.icon}</span>
+      <span class="app-name">${app.name}</span>
+    </div>
+  `).join('');
+}
+
+function openApp(query) {
+  const q = query.toLowerCase();
+  const app = KNOWN_APPS.find(a => a.keywords.some(k => q.includes(k)));
+  if (app) {
+    launchApp(app.url, app.name);
+  } else {
+    speak(`No conozco la aplicación ${query}. Buscando...`);
+    browserSearch(query + ' app android');
+  }
+}
+
+function launchApp(url, name) {
+  speak(`Abriendo ${name}.`);
+  try {
+    if (window.Capacitor) {
+      Capacitor.Plugins.App.openUrl({ url });
+    } else {
+      window.open(url, '_system');
+    }
+  } catch(e) {
+    toast('No pude abrir ' + name);
+  }
+}
+
+// ════════════════════════════════════════════════
+// NAVEGADOR
+// ════════════════════════════════════════════════
+function browserSearch(query) {
+  speak(`Buscando "${query}" en el navegador.`);
+  const url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+  if (window.Capacitor) {
+    Capacitor.Plugins.Browser?.open({ url });
+  } else {
+    window.open(url, '_blank');
+  }
+}
+
+// ════════════════════════════════════════════════
+// CONTACTOS
+// ════════════════════════════════════════════════
+function renderContacts() {
+  const q = (document.getElementById('contact-search')?.value || '').toLowerCase();
+  const list = document.getElementById('contacts-list');
+  if (!list) return;
+  const filtered = State.contacts.filter(c =>
+    c.name.toLowerCase().includes(q) || c.phone.includes(q)
+  );
+  list.innerHTML = filtered.length ? filtered.map((c, i) => `
+    <div class="list-item">
+      <div class="list-item-icon">${c.favorite ? '⭐' : '👤'}</div>
+      <div class="list-item-info">
+        <span class="list-item-title">${c.name}</span>
+        <span class="list-item-sub">${c.phone}</span>
+      </div>
+      <div class="list-item-actions">
+        <button class="icon-btn" onclick="callContact(${State.contacts.indexOf(c)})">📞</button>
+        <button class="icon-btn" onclick="editContact(${State.contacts.indexOf(c)})">✏️</button>
+        <button class="icon-btn" onclick="deleteContact(${State.contacts.indexOf(c)})">🗑</button>
+      </div>
+    </div>
+  `).join('') : `<p class="empty-hint">Sin contactos. Toca ＋ para agregar.</p>`;
+}
+
+function openAddContact() {
+  State.editingContact = null;
+  document.getElementById('contact-modal-title').textContent = 'Nuevo Contacto';
+  document.getElementById('contact-name-input').value = '';
+  document.getElementById('contact-phone-input').value = '';
+  document.getElementById('contact-fav').checked = false;
+  document.getElementById('contact-modal').classList.remove('hidden');
+}
+
+function editContact(index) {
+  const c = State.contacts[index];
+  State.editingContact = index;
+  document.getElementById('contact-modal-title').textContent = 'Editar Contacto';
+  document.getElementById('contact-name-input').value = c.name;
+  document.getElementById('contact-phone-input').value = c.phone;
+  document.getElementById('contact-fav').checked = c.favorite || false;
+  document.getElementById('contact-modal').classList.remove('hidden');
+}
+
+function saveContact() {
+  const name = document.getElementById('contact-name-input').value.trim();
+  const phone = document.getElementById('contact-phone-input').value.trim();
+  const favorite = document.getElementById('contact-fav').checked;
+  if (!name || !phone) { toast('Nombre y teléfono son requeridos'); return; }
+  if (State.editingContact !== null) {
+    State.contacts[State.editingContact] = { name, phone, favorite };
+  } else {
+    State.contacts.push({ name, phone, favorite });
+  }
+  save();
+  closeContactModal();
+  renderContacts();
+  toast('Contacto guardado');
+}
+
+function deleteContact(index) {
+  if (confirm(`¿Eliminar a ${State.contacts[index].name}?`)) {
+    State.contacts.splice(index, 1);
+    save();
+    renderContacts();
+  }
+}
+
+function callContact(index) {
+  const c = State.contacts[index];
+  requireConfirm(`¿Confirmas llamar a ${c.name}?`, () => callNumber(c.phone));
+}
+
+function closeContactModal() {
+  document.getElementById('contact-modal').classList.add('hidden');
+}
+
+// ════════════════════════════════════════════════
+// RUTINAS
+// ════════════════════════════════════════════════
+function renderRoutines() {
+  const list = document.getElementById('routines-list');
+  if (!list) return;
+  list.innerHTML = State.routines.length ? State.routines.map((r, i) => `
+    <div class="list-item">
+      <div class="list-item-icon">${r.active ? '⏰' : '⏸'}</div>
+      <div class="list-item-info">
+        <span class="list-item-title">${r.name}</span>
+        <span class="list-item-sub">${r.time} — ${r.message}</span>
+      </div>
+      <div class="list-item-actions">
+        <button class="icon-btn" onclick="toggleRoutine(${i})">${r.active ? '⏸' : '▶️'}</button>
+        <button class="icon-btn" onclick="deleteRoutine(${i})">🗑</button>
+      </div>
+    </div>
+  `).join('') : `<p class="empty-hint">Sin rutinas. Toca ＋ para crear una.</p>`;
+}
+
+function openAddRoutine() {
+  document.getElementById('routine-name-input').value = '';
+  document.getElementById('routine-time-input').value = '';
+  document.getElementById('routine-msg-input').value = '';
+  document.getElementById('routine-active').checked = true;
+  document.getElementById('routine-modal').classList.remove('hidden');
+}
+
+function saveRoutine() {
+  const name = document.getElementById('routine-name-input').value.trim();
+  const time = document.getElementById('routine-time-input').value;
+  const message = document.getElementById('routine-msg-input').value.trim();
+  const active = document.getElementById('routine-active').checked;
+  if (!name || !time || !message) { toast('Completa todos los campos'); return; }
+  State.routines.push({ name, time, message, active });
+  save();
+  closeRoutineModal();
+  renderRoutines();
+  scheduleRoutines();
+  toast('Rutina guardada');
+}
+
+function closeRoutineModal() {
+  document.getElementById('routine-modal').classList.add('hidden');
+}
+
+function toggleRoutine(index) {
+  State.routines[index].active = !State.routines[index].active;
+  save();
+  renderRoutines();
+  scheduleRoutines();
+}
+
+function deleteRoutine(index) {
+  State.routines.splice(index, 1);
+  save();
+  renderRoutines();
+  scheduleRoutines();
+}
+
+function scheduleRoutines() {
+  State.routineTimers.forEach(t => clearInterval(t));
+  State.routineTimers = [];
+  const timer = setInterval(() => {
+    const now = new Date();
+    const hhmm = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    State.routines.forEach(r => {
+      if (r.active && r.time === hhmm) {
+        const n = State.preferences.userName ? `, ${State.preferences.userName}` : '';
+        speak(r.message.replace('{nombre}', n));
+      }
+    });
+  }, 60000);
+  State.routineTimers.push(timer);
+}
+
+// ════════════════════════════════════════════════
+// PREFERENCIAS
+// ════════════════════════════════════════════════
+function loadPreferencesUI() {
+  document.getElementById('pref-name').value = State.preferences.userName || '';
+  document.getElementById('pref-assistant-name').value = State.preferences.assistantName || 'Asistente';
+  document.getElementById('pref-keyword').value = State.preferences.keyword || 'oye asistente';
+  document.getElementById('pref-rate').value = State.preferences.rate || 1;
+  document.getElementById('pref-pitch').value = State.preferences.pitch || 1;
+  document.getElementById('rate-label').textContent = (State.preferences.rate || 1) + 'x';
+}
+
+function updateRateLabel(v) {
+  document.getElementById('rate-label').textContent = parseFloat(v).toFixed(1) + 'x';
+}
+
+function savePreferences() {
+  State.preferences.userName = document.getElementById('pref-name').value.trim();
+  State.preferences.assistantName = document.getElementById('pref-assistant-name').value.trim() || 'Asistente';
+  State.preferences.keyword = document.getElementById('pref-keyword').value.trim().toLowerCase() || 'oye asistente';
+  State.preferences.rate = parseFloat(document.getElementById('pref-rate').value);
+  State.preferences.pitch = parseFloat(document.getElementById('pref-pitch').value);
+  save();
+  document.getElementById('assistant-name').textContent = State.preferences.assistantName;
+  toast('Preferencias guardadas');
+  showScreen('screen-main');
+}
+
+function testVoice() {
+  const n = State.preferences.userName ? State.preferences.userName : 'usuario';
+  speak(`Hola ${n}, soy ${State.preferences.assistantName || 'tu asistente'}. ¿En qué te puedo ayudar hoy?`);
+}
+
+// ════════════════════════════════════════════════
+// ESTADO DE ORB
+// ════════════════════════════════════════════════
+function setOrbListening() {
+  const orb = document.getElementById('orb');
+  const label = document.getElementById('orb-label');
+  const icon = document.getElementById('orb-icon');
+  orb.className = 'orb listening';
+  label.textContent = 'Escuchando...';
+  icon.textContent = '👂';
+}
+
+function setOrbIdle() {
+  State.listening = false;
+  const orb = document.getElementById('orb');
+  const label = document.getElementById('orb-label');
+  const icon = document.getElementById('orb-icon');
+  orb.className = 'orb idle';
+  label.textContent = 'Toca para hablar';
+  icon.textContent = '🎙️';
+  hideTranscript();
+}
+
+// ════════════════════════════════════════════════
+// UI HELPERS
+// ════════════════════════════════════════════════
+function showTranscript(text) {
+  const box = document.getElementById('transcript-box');
+  const el = document.getElementById('transcript-text');
+  box.classList.remove('hidden');
+  el.textContent = text;
+}
+
+function hideTranscript() {
+  document.getElementById('transcript-box').classList.add('hidden');
+}
+
+function showResponse(text) {
+  const box = document.getElementById('response-box');
+  const el = document.getElementById('response-text');
+  box.classList.remove('hidden');
+  el.textContent = text;
+  clearTimeout(showResponse._t);
+  showResponse._t = setTimeout(() => box.classList.add('hidden'), 5000);
+}
+
+function showConfirm(text) {
+  const box = document.getElementById('confirm-box');
+  const el = document.getElementById('confirm-text');
+  box.classList.remove('hidden');
+  el.textContent = text;
+  const fill = document.getElementById('confirm-timer-fill');
+  if(fill) fill.style.width = '100%';
+}
+
+function hideConfirm() {
+  document.getElementById('confirm-box').classList.add('hidden');
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.add('hidden'), 3000);
+}
+
+// ════════════════════════════════════════════════
+// UTILIDADES
+// ════════════════════════════════════════════════
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Buenos días';
+  if (h < 19) return 'Buenas tardes';
+  return 'Buenas noches';
+}
+
+// ════════════════════════════════════════════════
+// NOTIFICACIÓN PERSISTENTE (requiere plugin Capacitor)
+// ════════════════════════════════════════════════
+async function setupPersistentNotification() {
+  if (!window.Capacitor) return;
+  try {
+    const { LocalNotifications } = Capacitor.Plugins;
+    await LocalNotifications.requestPermissions();
+    await LocalNotifications.schedule({
+      notifications: [{
+        title: State.preferences.assistantName || 'Asistente',
+        body: `Di "${State.preferences.keyword || 'oye asistente'}" para activar`,
+        id: 1,
+        ongoing: true,
+        autoCancel: false,
+        smallIcon: 'ic_launcher'
+      }]
+    });
+  } catch(e) { console.log('Notification error:', e); }
+}
+
+// ════════════════════════════════════════════════
+// BATERÍA EN TIEMPO REAL
+// ════════════════════════════════════════════════
+async function initBatteryMonitor() {
+  try {
+    const battery = await navigator.getBattery();
+    updateBatteryUI(Math.round(battery.level * 100), battery.charging);
+    battery.addEventListener('levelchange', () => updateBatteryUI(Math.round(battery.level * 100), battery.charging));
+    battery.addEventListener('chargingchange', () => updateBatteryUI(Math.round(battery.level * 100), battery.charging));
+    // Alerta de batería baja
+    battery.addEventListener('levelchange', () => {
+      if (battery.level <= 0.15 && !battery.charging) {
+        speak(`Atención, batería baja: ${Math.round(battery.level * 100)} por ciento.`);
+      }
+    });
+  } catch(e) {}
+}
+
+// WiFi status
+function initWifiMonitor() {
+  const el = document.getElementById('status-wifi');
+  function update() {
+    if(el) el.textContent = navigator.onLine ? '📶' : '📵';
+  }
+  window.addEventListener('online', update);
+  window.addEventListener('offline', update);
+  update();
+}
+
+// ════════════════════════════════════════════════
+// INICIO
+// ════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  load();
+  initSpeechRecognition();
+  initBatteryMonitor();
+  initWifiMonitor();
+  scheduleRoutines();
+  document.getElementById('assistant-name').textContent = State.preferences.assistantName || 'Asistente';
+  document.getElementById('btn-shuffle').style.opacity = '0.4';
+  // Inicia escucha de fondo después de 2 segundos
+  setTimeout(startBackgroundListening, 2000);
+  setTimeout(setupPersistentNotification, 1000);
+});
+</script>
+</body>
+</html>
