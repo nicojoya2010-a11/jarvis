@@ -252,86 +252,161 @@ function showScreen(id) {
 
 // ════════════════════════════════════════════════
 // SÍNTESIS DE VOZ (TTS)
+// Usa plugin nativo en Android, fallback web en browser
 // ════════════════════════════════════════════════
-function speak(text, callback) {
-  if (!('speechSynthesis' in window)) { if(callback) callback(); return; }
-  window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'es-ES';
-  u.rate = State.preferences.rate || 1;
-  u.pitch = State.preferences.pitch || 1;
-  u.onend = () => { if(callback) callback(); };
-  window.speechSynthesis.speak(u);
+async function speak(text, callback) {
   showResponse(text);
+  try {
+    // Plugin nativo Capacitor (funciona en Android WebView)
+    if (window.Capacitor && Capacitor.isPluginAvailable('TextToSpeech')) {
+      const { TextToSpeech } = Capacitor.Plugins;
+      await TextToSpeech.speak({
+        text,
+        lang: 'es-ES',
+        rate: State.preferences.rate || 1.0,
+        pitch: State.preferences.pitch || 1.0,
+        volume: 1.0,
+        category: 'ambient'
+      });
+      if (callback) callback();
+      return;
+    }
+  } catch(e) { console.warn('TTS nativo falló:', e); }
+
+  // Fallback: Web Speech API (funciona en Chrome desktop)
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'es-ES';
+    u.rate = State.preferences.rate || 1;
+    u.pitch = State.preferences.pitch || 1;
+    u.onend = () => { if(callback) callback(); };
+    window.speechSynthesis.speak(u);
+    return;
+  }
+
+  // Sin TTS: solo muestra texto
+  if (callback) callback();
 }
 
 // ════════════════════════════════════════════════
 // RECONOCIMIENTO DE VOZ (STT)
+// Usa plugin nativo en Android, fallback web en browser
 // ════════════════════════════════════════════════
-let recognition = null;
-let bgRecognition = null;
+async function startListening() {
+  if (State.listening) return;
+  State.listening = true;
+  setOrbListening();
+  hideTranscript();
 
-function initSpeechRecognition() {
+  try {
+    // Plugin nativo Capacitor
+    if (window.Capacitor && Capacitor.isPluginAvailable('SpeechRecognition')) {
+      const { SpeechRecognition } = Capacitor.Plugins;
+
+      // Pedir permiso
+      const perm = await SpeechRecognition.requestPermissions();
+      if (perm.speechRecognition !== 'granted') {
+        toast('Permiso de micrófono denegado');
+        setOrbIdle();
+        return;
+      }
+
+      await SpeechRecognition.start({
+        language: 'es-ES',
+        maxResults: 1,
+        prompt: 'Habla ahora',
+        partialResults: true,
+        popup: false
+      });
+
+      SpeechRecognition.addListener('partialResults', (data) => {
+        if (data.matches && data.matches.length > 0) {
+          showTranscript(data.matches[0]);
+        }
+      });
+
+      SpeechRecognition.addListener('listeningState', (state) => {
+        if (state.status === 'stopped') {
+          setOrbIdle();
+          State.listening = false;
+        }
+      });
+
+      // Resultado final
+      const result = await SpeechRecognition.stop();
+      if (result && result.matches && result.matches.length > 0) {
+        const cmd = result.matches[0].toLowerCase().trim();
+        showTranscript(cmd);
+        processCommand(cmd);
+      }
+      setOrbIdle();
+      State.listening = false;
+      return;
+    }
+  } catch(e) {
+    console.warn('STT nativo falló:', e);
+  }
+
+  // Fallback: Web Speech API
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) { toast('Reconocimiento de voz no disponible'); return; }
-  recognition = new SpeechRecognition();
+  if (!SpeechRecognition) {
+    toast('Reconocimiento de voz no disponible en este dispositivo');
+    setOrbIdle();
+    State.listening = false;
+    return;
+  }
+  const recognition = new SpeechRecognition();
   recognition.lang = 'es-ES';
   recognition.continuous = false;
   recognition.interimResults = true;
   recognition.onresult = (e) => {
     const t = Array.from(e.results).map(r => r[0].transcript).join('');
     showTranscript(t);
-    if (e.results[e.results.length - 1].isFinal) processCommand(t.toLowerCase().trim());
+    if (e.results[e.results.length - 1].isFinal) {
+      processCommand(t.toLowerCase().trim());
+    }
   };
   recognition.onerror = (e) => {
-    if (e.error !== 'no-speech') toast('Error de micrófono: ' + e.error);
+    if (e.error !== 'no-speech') toast('Error: ' + e.error);
     setOrbIdle();
+    State.listening = false;
   };
-  recognition.onend = () => setOrbIdle();
+  recognition.onend = () => { setOrbIdle(); State.listening = false; };
+  try { recognition.start(); } catch(e) {}
 }
 
 function toggleListening() {
-  if (State.listening) {
-    stopListening();
-  } else {
-    startListening();
-  }
-}
-
-function startListening() {
-  if (!recognition) initSpeechRecognition();
-  if (!recognition) return;
-  State.listening = true;
-  setOrbListening();
-  hideTranscript();
-  try { recognition.start(); } catch(e) {}
+  if (State.listening) stopListening();
+  else startListening();
 }
 
 function stopListening() {
   State.listening = false;
   setOrbIdle();
-  if (recognition) try { recognition.stop(); } catch(e) {}
+  try {
+    if (window.Capacitor && Capacitor.isPluginAvailable('SpeechRecognition')) {
+      Capacitor.Plugins.SpeechRecognition.stop();
+    }
+  } catch(e) {}
 }
 
-// Escucha de fondo para palabra clave
+// Escucha de fondo para palabra clave (solo web, en Android usa notificación)
 function startBackgroundListening() {
+  if (window.Capacitor) return; // En Android no se usa esto
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) return;
-  bgRecognition = new SpeechRecognition();
-  bgRecognition.lang = 'es-ES';
-  bgRecognition.continuous = true;
-  bgRecognition.interimResults = false;
-  bgRecognition.onresult = (e) => {
+  const bg = new SpeechRecognition();
+  bg.lang = 'es-ES';
+  bg.continuous = true;
+  bg.interimResults = false;
+  bg.onresult = (e) => {
     const t = Array.from(e.results).map(r => r[0].transcript).join(' ').toLowerCase();
     const kw = (State.preferences.keyword || 'oye asistente').toLowerCase();
-    if (t.includes(kw)) {
-      startListening();
-    }
+    if (t.includes(kw)) startListening();
   };
-  bgRecognition.onend = () => {
-    if (!State.listening) setTimeout(startBackgroundListening, 1000);
-  };
-  try { bgRecognition.start(); } catch(e) {}
+  bg.onend = () => { if (!State.listening) setTimeout(startBackgroundListening, 1000); };
+  try { bg.start(); } catch(e) {}
 }
 
 // ════════════════════════════════════════════════
@@ -1227,7 +1302,6 @@ function initWifiMonitor() {
 // ════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
   load();
-  initSpeechRecognition();
   initBatteryMonitor();
   initWifiMonitor();
   scheduleRoutines();
